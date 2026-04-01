@@ -1,0 +1,31 @@
+name = "proof"
+version = "0.1.0"
+keywords = ["math"]
+defaultTargets = ["proof-remover"]
+
+[leanOptions]
+pp.unicode.fun = true                 # pretty-prints `fun a ↦ b`
+relaxedAutoImplicit = false
+weak.linter.mathlibStandardSet = true
+maxSynthPendingDepth = 3
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.28.0"
+
+[[require]]
+name = "aesop"
+git = "https://github.com/leanprover-community/aesop.git"
+rev = "v4.28.0"
+
+[[lean_lib]]
+name = "proof"
+
+[[lean_lib]]
+name = "ProofRemover"
+
+[[lean_exe]]
+name = "proof-remover"
+root = "ProofRemover.Main"
+supportInterpreter = true
