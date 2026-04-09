@@ -1,6 +1,8 @@
 import Mathlib.Algebra.Group.Defs
 import Mathlib.Data.Int.Basic
 import Mathlib.Data.List.Basic
+import Mathlib.Data.List.Count
+import Mathlib.Tactic
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Ring
 import Mathlib.Tactic.NormNum
@@ -550,11 +552,255 @@ lemma factor_pair_length_bound (k m : ℕ) (hk : k ≥ 17) (hm : m ≥ 17) (hpro
   · have : m = 21 := by omega
     omega
 
-/-- AXIOM: For c = 1155 exactly with constraints k - ℓ = 17 and m - j = 17,
-    we must have k*m ≥ 1155. -/
-axiom km_ge_1155_for_c_1155 (w : List Generator)
+@[simp] lemma countXPos_eq_countP (w : List Generator) :
+    countXPos w = w.countP (· == Generator.x_pos) := by
+  induction w with
+  | nil => rfl
+  | cons g gs ih =>
+    cases g <;> simp [countXPos, ih, Nat.add_comm]
+
+@[simp] lemma countXNeg_eq_countP (w : List Generator) :
+    countXNeg w = w.countP (· == Generator.x_neg) := by
+  induction w with
+  | nil => rfl
+  | cons g gs ih =>
+    cases g <;> simp [countXNeg, ih, Nat.add_comm]
+
+@[simp] lemma countYPos_eq_countP (w : List Generator) :
+    countYPos w = w.countP (· == Generator.y_pos) := by
+  induction w with
+  | nil => rfl
+  | cons g gs ih =>
+    cases g <;> simp [countYPos, ih, Nat.add_comm]
+
+@[simp] lemma countYNeg_eq_countP (w : List Generator) :
+    countYNeg w = w.countP (· == Generator.y_neg) := by
+  induction w with
+  | nil => rfl
+  | cons g gs ih =>
+    cases g <;> simp [countYNeg, ih, Nat.add_comm]
+
+lemma evalWord_cons (g : Generator) (w : List Generator) :
+    evalWord (g :: w) = g.eval * evalWord w := rfl
+
+lemma evalWord_append (w₁ w₂ : List Generator) :
+    evalWord (w₁ ++ w₂) = evalWord w₁ * evalWord w₂ := by
+  induction w₁ with
+  | nil => simp [evalWord]
+  | cons g gs ih => simp [evalWord, ih, mul_assoc]
+
+lemma evalWord_a_countP (w : List Generator) :
+    (evalWord w).a = ↑(w.countP (· == .x_pos)) - ↑(w.countP (· == .x_neg)) := by
+  simpa using evalWord_a_eq_count_diff w
+
+lemma evalWord_b_countP (w : List Generator) :
+    (evalWord w).b = ↑(w.countP (· == .y_pos)) - ↑(w.countP (· == .y_neg)) := by
+  simpa using evalWord_b_eq_count_diff w
+
+lemma evalWord_append_c (u v : List Generator) :
+    (evalWord (u ++ v)).c = (evalWord u).c + (evalWord v).c + (evalWord u).a * (evalWord v).b := by
+  rw [evalWord_append]
+  simp [mul_c]
+
+lemma evalWord_c_remove_y_neg (u v : List Generator) :
+    (evalWord (u ++ [.y_neg] ++ v)).c = (evalWord (u ++ v)).c - (evalWord u).a := by
+  have h_c_neg :
+      (evalWord ([.y_neg] ++ v)).c = (evalWord v).c ∧
+      (evalWord ([.y_neg] ++ v)).a = (evalWord v).a ∧
+      (evalWord ([.y_neg] ++ v)).b = -1 + (evalWord v).b := by
+    simp [evalWord_cons, Generator.eval, y, mul_a, mul_b, mul_c]
+  simp_all [evalWord_append_c]
+  ring
+
+lemma evalWord_c_remove_x_neg (u v : List Generator) :
+    (evalWord (u ++ [.x_neg] ++ v)).c = (evalWord (u ++ v)).c - (evalWord v).b := by
+  convert evalWord_append_c u ([.x_neg] ++ v) using 1
+  · simp [List.append_assoc]
+  · rw [evalWord_append]
+    simp [evalWord_cons, Generator.eval, x, evalWord_append_c]
+    ring
+
+lemma exists_split_x_neg (w : List Generator) (h : countXNeg w ≥ 1) :
+    ∃ u v, w = u ++ [Generator.x_neg] ++ v := by
+  induction w with
+  | nil => simp [countXNeg] at h
+  | cons g gs ih =>
+    cases g with
+    | x_neg => exact ⟨[], gs, rfl⟩
+    | x_pos =>
+      have h' : countXNeg gs ≥ 1 := by simpa [countXNeg] using h
+      obtain ⟨u, v, hv⟩ := ih h'
+      exact ⟨Generator.x_pos :: u, v, by simp [hv]⟩
+    | y_pos =>
+      have h' : countXNeg gs ≥ 1 := by simpa [countXNeg] using h
+      obtain ⟨u, v, hv⟩ := ih h'
+      exact ⟨Generator.y_pos :: u, v, by simp [hv]⟩
+    | y_neg =>
+      have h' : countXNeg gs ≥ 1 := by simpa [countXNeg] using h
+      obtain ⟨u, v, hv⟩ := ih h'
+      exact ⟨Generator.y_neg :: u, v, by simp [hv]⟩
+
+lemma exists_split_y_neg (w : List Generator) (h : countYNeg w ≥ 1) :
+    ∃ u v, w = u ++ [Generator.y_neg] ++ v := by
+  induction w with
+  | nil => simp [countYNeg] at h
+  | cons g gs ih =>
+    cases g with
+    | y_neg => exact ⟨[], gs, rfl⟩
+    | x_pos =>
+      have h' : countYNeg gs ≥ 1 := by simpa [countYNeg] using h
+      obtain ⟨u, v, hv⟩ := ih h'
+      exact ⟨Generator.x_pos :: u, v, by simp [hv]⟩
+    | x_neg =>
+      have h' : countYNeg gs ≥ 1 := by simpa [countYNeg] using h
+      obtain ⟨u, v, hv⟩ := ih h'
+      exact ⟨Generator.x_neg :: u, v, by simp [hv]⟩
+    | y_pos =>
+      have h' : countYNeg gs ≥ 1 := by simpa [countYNeg] using h
+      obtain ⟨u, v, hv⟩ := ih h'
+      exact ⟨Generator.y_pos :: u, v, by simp [hv]⟩
+
+lemma evalWord_b_append (u v : List Generator) :
+    (evalWord (u ++ v)).b = (evalWord u).b + (evalWord v).b := by
+  rw [evalWord_append]
+  simp [mul_b]
+
+lemma evalWord_a_append (u v : List Generator) :
+    (evalWord (u ++ v)).a = (evalWord u).a + (evalWord v).a := by
+  rw [evalWord_append]
+  simp [mul_a]
+
+lemma evalWord_b_le (w : List Generator) :
+    (evalWord w).b ≤ ↑(w.countP (· == .y_pos)) := by
+  rw [evalWord_b_countP]
+  exact sub_le_self _ (Nat.cast_nonneg _)
+
+theorem evalWord_c_le_countP (w : List Generator)
+    (ha : 0 ≤ (evalWord w).a) (hb : 0 ≤ (evalWord w).b) :
+    (evalWord w).c ≤ ↑(w.countP (· == .x_pos)) * ↑(w.countP (· == .y_pos)) := by
+  revert w
+  intro w
+  induction' m : w.length using Nat.strong_induction_on with n ih generalizing w
+  cases w with
+  | nil =>
+      intro ha hb
+      simp [evalWord]
+  | cons g w =>
+      intro ha hb
+      cases g with
+      | x_pos =>
+          have hwlen : w.length < n := by
+            have hm' : w.length + 1 = n := by simpa using m
+            omega
+          by_cases hwa : 0 ≤ (evalWord w).a
+          · by_cases hwb : 0 ≤ (evalWord w).b
+            · have hrec := ih w.length hwlen w rfl hwa hwb
+              have hb_le := evalWord_b_le w
+              simp [evalWord_cons, Generator.eval, x, mul_a, mul_b, mul_c] at ha hb hrec ⊢
+              linarith
+            · have hwb_lt : (evalWord w).b < 0 := by omega
+              simp [evalWord_cons, Generator.eval, x, mul_b] at hb
+              linarith
+          · have hwa_lt : (evalWord w).a < 0 := by omega
+            have hxneg : countXNeg w ≥ 1 := by
+              rw [evalWord_a_eq_count_diff] at hwa_lt
+              omega
+            obtain ⟨u, v, hw⟩ := exists_split_x_neg w hxneg
+            have hshort : (u ++ v).length < n := by
+              have hm' : (u ++ [Generator.x_neg] ++ v).length + 1 = n := by
+                simpa [hw] using m
+              have hm'' : (u ++ v).length + 2 = n := by
+                simpa [List.length_append] using hm'
+              omega
+            have ha' : 0 ≤ (evalWord (u ++ v)).a := by
+              rw [hw] at ha
+              simp [evalWord_a_append, evalWord_append, evalWord_cons, Generator.eval, x, mul_a] at *
+              omega
+            have hb' : 0 ≤ (evalWord (u ++ v)).b := by
+              rw [hw] at hb
+              simp [evalWord_b_append, evalWord_append, evalWord_cons, Generator.eval, x, mul_b] at *
+              omega
+            have hrec := ih (u ++ v).length hshort (u ++ v) rfl ha' hb'
+            have hu_b := evalWord_b_le u
+            have hv_b := evalWord_b_le v
+            rw [hw] at ha hb ⊢
+            simp [evalWord_c_remove_x_neg, evalWord_b_append, evalWord_append,
+              evalWord_cons, Generator.eval, x, mul_a, mul_b, mul_c] at *
+            linarith
+      | x_neg =>
+          have hwlen : w.length < n := by
+            have hm' : w.length + 1 = n := by simpa using m
+            omega
+          have hwa : 0 ≤ (evalWord w).a := by
+            simp [evalWord_cons, Generator.eval, x, mul_a] at ha
+            omega
+          have hrec := ih w.length hwlen w rfl hwa (by
+            simpa [evalWord_cons, Generator.eval, x, mul_b] using hb)
+          simp [evalWord_cons, Generator.eval, x, mul_a, mul_b, mul_c] at ha hb hrec ⊢
+          linarith [evalWord_b_le w]
+      | y_pos =>
+          have hwlen : w.length < n := by
+            have hm' : w.length + 1 = n := by simpa using m
+            omega
+          by_cases hwb : 0 ≤ (evalWord w).b
+          · have hwa : 0 ≤ (evalWord w).a := by
+              simpa [evalWord_cons, Generator.eval, y, mul_a] using ha
+            have hrec := ih w.length hwlen w rfl hwa hwb
+            simp [evalWord_cons, Generator.eval, y, mul_a, mul_b, mul_c] at ha hb hrec ⊢
+            linarith [evalWord_b_le w]
+          · have hwb_lt : (evalWord w).b < 0 := by omega
+            have hyneg : countYNeg w ≥ 1 := by
+              rw [evalWord_b_eq_count_diff] at hwb_lt
+              omega
+            obtain ⟨u, v, hw⟩ := exists_split_y_neg w hyneg
+            have hshort : (u ++ v).length < n := by
+              have hm' : (u ++ [Generator.y_neg] ++ v).length + 1 = n := by
+                simpa [hw] using m
+              have hm'' : (u ++ v).length + 2 = n := by
+                simpa [List.length_append] using hm'
+              omega
+            have ha' : 0 ≤ (evalWord (u ++ v)).a := by
+              rw [hw] at ha
+              simp [evalWord_a_append, evalWord_append, evalWord_cons, Generator.eval, y, mul_a] at *
+              omega
+            have hb' : 0 ≤ (evalWord (u ++ v)).b := by
+              rw [hw] at hb
+              simp [evalWord_b_append, evalWord_append, evalWord_cons, Generator.eval, y, mul_b] at *
+              omega
+            have hrec := ih (u ++ v).length hshort (u ++ v) rfl ha' hb'
+            rw [hw] at ha hb ⊢
+            simp [evalWord_c_remove_y_neg, evalWord_a_append, evalWord_append,
+              evalWord_cons, Generator.eval, y, mul_a, mul_b, mul_c] at *
+            have hav_le : (evalWord v).a ≤ ↑(v.countP (· == .x_pos)) := by
+              rw [evalWord_a_countP]
+              linarith
+            have hau_neg_le : -(evalWord u).a ≤ ↑(v.countP (· == .x_pos)) := by
+              linarith [ha', hav_le]
+            nlinarith [hrec, hau_neg_le]
+      | y_neg =>
+          have hwlen : w.length < n := by
+            have hm' : w.length + 1 = n := by simpa using m
+            omega
+          have hwa : 0 ≤ (evalWord w).a := by
+            simpa [evalWord_cons, Generator.eval, y, mul_a] using ha
+          have hwb : 0 ≤ (evalWord w).b := by
+            simp [evalWord_cons, Generator.eval, y, mul_b] at hb
+            omega
+          have hrec := ih w.length hwlen w rfl hwa hwb
+          simp [evalWord_cons, Generator.eval, y, mul_a, mul_b, mul_c] at ha hb hrec ⊢
+          linarith
+
+theorem km_ge_1155_for_c_1155 (w : List Generator)
     (hw : evalWord w = ⟨17, 17, 1155⟩) :
-    countXPos w * countYPos w ≥ 1155
+    countXPos w * countYPos w ≥ 1155 := by
+  have ha_nn : 0 ≤ (evalWord w).a := by rw [hw]; norm_num
+  have hb_nn : 0 ≤ (evalWord w).b := by rw [hw]; norm_num
+  have h_key := evalWord_c_le_countP w ha_nn hb_nn
+  rw [hw] at h_key
+  norm_num at h_key
+  have hprod : 1155 ≤ w.countP (· == .x_pos) * w.countP (· == .y_pos) := by
+    exact_mod_cast h_key
+  simpa using hprod
 
 /-- Helper: If k*m > 1155, length ≥ 102 -/
 lemma length_when_km_large (k ℓ m j : ℕ)
