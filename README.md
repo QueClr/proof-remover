@@ -26,6 +26,12 @@ Keep specific theorem-like declarations instead of the default last one:
 lake exe proof-remover path/to/input.lean --keep Namespace.foo --keep Namespace.bar --out path/to/output.lean
 ```
 
+Keep only the definitions needed for the retained target, without emitting the target theorem itself:
+
+```bash
+lake exe proof-remover path/to/input.lean --defs-only --out path/to/output.lean
+```
+
 Skip verification:
 
 ```bash
@@ -42,4 +48,5 @@ lake exe proof-remover test-files/heisenberg.lean --out /tmp/heisenberg.out.lean
 
 - Retained `def` bodies are kept.
 - `--keep` expects declaration names; for namespaced declarations, use the full name.
+- `--defs-only` still uses the retained theorem target to compute dependencies, but omits that target from the emitted file.
 - Verification is enabled by default.

@@ -335,12 +335,17 @@ partial def stubProof (sorryDeclVal sorryInstanceVal : Syntax) (cmd : Syntax) : 
     cmd
 
 def sliceCommands (pf : ParsedFile) (maps : DeclMaps) (needed : Std.HashSet Name)
-    (sorryDeclVal sorryInstanceVal : Syntax) : Array RetainedCmd := Id.run do
+    (targets : Array Name) (keepTargets : Bool) (sorryDeclVal sorryInstanceVal : Syntax) : Array RetainedCmd := Id.run do
   let scopes := buildScopeMaps pf
   let mut keepIdx : Std.HashSet Nat := {}
   for n in needed do
     if let some i := maps.declToCmd.get? n then
       keepIdx := keepIdx.insert i
+
+  if !keepTargets then
+    for n in targets do
+      if let some i := maps.declToCmd.get? n then
+        keepIdx := keepIdx.erase i
 
   let mut keptDeclSuffix : Array Nat := Array.replicate (pf.commands.size + 1) 0
   for off in [0:pf.commands.size] do

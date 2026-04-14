@@ -9,12 +9,13 @@ namespace ProofRemover
 open Lean
 
 private def usage : String :=
-  "usage: proof-remover <input.lean> [--out <output.lean>] [--keep <declName>]... [--no-verify]\n"
+  "usage: proof-remover <input.lean> [--out <output.lean>] [--keep <declName>]... [--defs-only] [--no-verify]\n"
 
 structure CliConfig where
   inputPath  : System.FilePath
   outPath    : System.FilePath := "out.lean"
   keepDecls  : Array String := #[]
+  keepTargets : Bool := true
   verify     : Bool := true
 
 private def parseDeclName (s : String) : Name :=
@@ -60,6 +61,8 @@ private def parseArgs (args : List String) : IO CliConfig := do
         let some n := rest.head? | throw <| IO.userError "missing value for --keep"
         rest := rest.tail!
         cfg := { cfg with keepDecls := cfg.keepDecls.push n }
+    | "--defs-only" | "--definitions-only" =>
+        cfg := { cfg with keepTargets := false }
     | "--no-verify" =>
         cfg := { cfg with verify := false }
     | "--help" | "-h" =>
@@ -77,7 +80,7 @@ def run (args : List String) : IO Unit := do
   let needed := computeNeededDecls pf maps targets
   let sorryDeclVal ← mkSorryDeclVal pf.env
   let sorryInstanceVal ← mkSorryInstanceVal pf.env
-  let cmds := sliceCommands pf maps needed sorryDeclVal sorryInstanceVal
+  let cmds := sliceCommands pf maps needed targets cfg.keepTargets sorryDeclVal sorryInstanceVal
   let parts := headerParts pf
 
   emitSlicedFile pf cmds cfg.outPath parts
